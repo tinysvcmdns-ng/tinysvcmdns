@@ -1,0 +1,27 @@
+language: C
+compiler: gcc
+dist: bionic
+
+#branches:
+#  only:
+#    master
+#    /^v\d+\.\d+(\.\d+)?(-\S*)?$/
+
+addons:
+  hosts:
+    - travis.local
+
+  apt:
+    packages:
+
+jobs:
+  include:
+    - stage: release
+      script:
+        make clean &&
+        make &&
+        mkdir -p ${PWD}/release/usr/lib &&
+        mkdir -p ${PWD}/release/usr/include/tinysvcmdns &&
+        cp libtinysvcmdns.a ${PWD}/release/usr/lib &&
+        cp mdnsd.h mdns.h ${PWD}/release/usr/include/tinysvcmdns &&
+        pushd ${PWD}/release && tar -czf ../tinysvcmdns-travis.tar.gz . && popd
