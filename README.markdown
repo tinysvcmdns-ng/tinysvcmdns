@@ -1,7 +1,18 @@
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=tinysvcmdns-ng_tinysvcmdns&metric=alert_status)](https://sonarcloud.io/dashboard?id=tinysvcmdns-ng_tinysvcmdns)
+
 NOTICE
 =======
 
-This project is un-maintained, and has been since 2013.
+~~This project is un-maintained, and has been since 2013.~~
+
+The goal is to revive Tinysvcmdns, to create a mDNS solution for embedded devices and applications.
+
+The first step is to clean the code, and corrects the vulnerbilities. Sonarcloud is a solution to find the bugs staticly, and tests and unittests must find the rests.
+
+The second step is to add some missing features, like the service discovering for an application, or the build for cross-platform. But the library should stay small, and other features may be added outside the main project.
+
+A community should grow around the project, and every help is welcome.
+
 
 There are known vulnerabilities that have been disclosed, and quite possibly 
 others that have yet to be disclosed. Refer to the issue tracker.

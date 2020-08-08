@@ -14,12 +14,21 @@ addons:
   apt:
     packages:
 
+  sonarcloud:
+    organization: ${SONARCLOUD_ORGANIZATION}
+    token:
+
 jobs:
   include:
+    - stage: sonarcloud
+      script:
+        - git clone ${GITHUB_QUALITY_TESTS} -b ${TRAVIS_BRANCH} 
+        - build-wrapper-linux-x86-64 --out-dir bw-output make
+        - sonar-scanner -Dsonar.cfamily.build-wrapper-output=bw-output \
+        -Dsonar.projectKey=${SONARCLOUD_ORGANIZATION}_tinysvcmdns
     - stage: release
       script:
-        make clean &&
-        make &&
+        make clean && make &&
         mkdir -p ${PWD}/release/usr/lib &&
         mkdir -p ${PWD}/release/usr/include/tinysvcmdns &&
         cp libtinysvcmdns.a ${PWD}/release/usr/lib &&
