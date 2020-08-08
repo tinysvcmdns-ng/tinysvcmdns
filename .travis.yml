@@ -22,10 +22,8 @@ jobs:
   include:
     - stage: sonarcloud
       script:
-        - git clone ${GITHUB_QUALITY_TESTS} -b ${TRAVIS_BRANCH} 
-        - build-wrapper-linux-x86-64 --out-dir bw-output make
-        - sonar-scanner -Dsonar.cfamily.build-wrapper-output=bw-output \
-        -Dsonar.projectKey=${SONARCLOUD_ORGANIZATION}_tinysvcmdns
+        - git clone ${GITHUB_QUALITY_TESTS} -b ${TRAVIS_BRANCH} quality
+        - pushd quality && make sonar-analyze && popd
     - stage: release
       script:
         make clean && make &&
