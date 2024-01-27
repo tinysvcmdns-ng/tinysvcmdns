@@ -35,10 +35,6 @@
 
 #include <netinet/in.h>
 
-
-#define DEFAULT_TTL		120
-
-
 struct name_comp {
 	uint8_t *label;	// label
 	size_t pos;		// position in msg
@@ -400,6 +396,7 @@ struct rr_entry *rr_create_a(uint8_t *name, uint32_t addr) {
 	DECL_MALLOC_ZERO_STRUCT(rr, rr_entry);
 	FILL_RR_ENTRY(rr, name, RR_A);
 	rr->data.A.addr = addr;
+	rr->ttl = DEFAULT_TTL_FOR_RECORD_WITH_HOSTNAME; // 120 seconds -- see RFC 6762 Section 10
 	return rr;
 }
 
@@ -408,6 +405,7 @@ struct rr_entry *rr_create_aaaa(uint8_t *name, struct in6_addr *addr) {
 	FILL_RR_ENTRY(rr, name, RR_AAAA);
 	rr->data.AAAA.addr = malloc(sizeof(*addr));
 	memcpy(rr->data.AAAA.addr, addr, sizeof(*addr));
+	rr->ttl = DEFAULT_TTL_FOR_RECORD_WITH_HOSTNAME; // 120 seconds -- see RFC 6762 Section 10
 	return rr;
 }
 
@@ -416,6 +414,7 @@ struct rr_entry *rr_create_srv(uint8_t *name, uint16_t port, uint8_t *target) {
 	FILL_RR_ENTRY(rr, name, RR_SRV);
 	rr->data.SRV.port = port;
 	rr->data.SRV.target = target;
+	rr->ttl = DEFAULT_TTL_FOR_RECORD_WITH_HOSTNAME; // 120 seconds -- see RFC 6762 Section 10
 	return rr;
 }
 
@@ -424,6 +423,7 @@ struct rr_entry *rr_create_ptr(uint8_t *name, struct rr_entry *d_rr) {
 	FILL_RR_ENTRY(rr, name, RR_PTR);
 	rr->cache_flush = 0;	// PTRs shouldn't have their cache flush bit set
 	rr->data.PTR.entry = d_rr;
+	rr->ttl = DEFAULT_TTL_FOR_RECORD_WITH_HOSTNAME; // 120 seconds -- see RFC 6762 Section 10
 	return rr;
 }
 

@@ -49,6 +49,8 @@
 #endif
 
 
+#define DEFAULT_TTL 4500
+#define DEFAULT_TTL_FOR_RECORD_WITH_HOSTNAME 120
 struct rr_data_srv {
 	uint16_t priority;
 	uint16_t weight;
