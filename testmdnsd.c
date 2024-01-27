@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
 	// create host entries
 	char *hostname = "some-random-host.local";
 
-	struct mdnsd *svr = mdnsd_start();
+	struct mdnsd *svr = mdnsd_start(NULL);
 	if (svr == NULL) {
 		printf("mdnsd_start() error\n");
 		return 1;

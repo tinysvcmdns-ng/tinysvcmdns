@@ -146,7 +146,7 @@ int main(int argc, char *argv[]) {
 
 	port = atoi(argv[3+opt]);
 
-	svr = mdnsd_start(host);
+	svr = mdnsd_start(&host);
 	if (svr == NULL) return print_usage();
 
 	txt = malloc((argc - 4 + 1 - opt) * sizeof(char**));
