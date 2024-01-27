@@ -153,7 +153,7 @@ int main(int argc, char *argv[]) {
 	memcpy(txt, argv + 4 + opt, (argc - 4 - opt) * sizeof(char**));
 	txt[argc - 4 - opt] = NULL;
 
-	mdnsd_set_hostname(svr, hostname, host.s_addr);
+	mdnsd_set_hostname(svr, hostname, &host);
 
 	sprintf(type, "%s.local", argv[2 + opt]);
 

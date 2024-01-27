@@ -42,7 +42,7 @@ struct mdnsd *mdnsd_start(struct in_addr *iaddr);
 void mdnsd_stop(struct mdnsd *s);
 
 // sets the hostname for the given MDNS responder instance
-void mdnsd_set_hostname(struct mdnsd *svr, const char *hostname, uint32_t ip);
+void mdnsd_set_hostname(struct mdnsd *svr, const char *hostname, struct in_addr *addr);
 void mdnsd_set_hostname_v6(struct mdnsd *svr, const char *hostname, struct in6_addr *addr);
 
 // adds an additional RR

@@ -26,19 +26,39 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifdef _WIN32
-#include <winsock2.h>
-#include <in6addr.h>
-#include <ws2tcpip.h>
-#else
 #include <sys/socket.h>
 #include <netdb.h>
 #include <arpa/inet.h>
-#endif
+#include <net/if.h>
+#include <ifaddrs.h>
 
 #include <stdio.h>
 #include "mdns.h"
 #include "mdnsd.h"
+
+static in_addr_t search_host(void)
+{
+	in_addr_t addr = 0;
+	struct ifaddrs *ifa_list;
+	struct ifaddrs *ifa_main;
+
+	if (getifaddrs(&ifa_list) < 0) {
+		DEBUG_PRINTF("getifaddrs() failed");
+		return 0;
+	}
+
+	for (ifa_main = ifa_list; ifa_main != NULL; ifa_main = ifa_main->ifa_next)
+	{
+		if ((ifa_main->ifa_flags & IFF_LOOPBACK) || !(ifa_main->ifa_flags & IFF_MULTICAST))
+			continue;
+		if (ifa_main->ifa_addr && ifa_main->ifa_addr->sa_family == AF_INET)
+		{
+			addr = ((struct sockaddr_in *)ifa_main->ifa_addr)->sin_addr.s_addr;
+			break;
+		}
+	}
+	return addr;
+}
 
 int main(int argc, char *argv[]) {
 	// create host entries
@@ -53,10 +73,14 @@ int main(int argc, char *argv[]) {
 	printf("mdnsd_start OK. press ENTER to add hostname & service\n");
 	getchar();
 
-	mdnsd_set_hostname(svr, hostname, inet_addr("192.168.0.29"));
+	struct in_addr v4addr;
+	v4addr.s_addr = search_host();
+	mdnsd_set_hostname(svr, hostname, &v4addr);
 
+	// Add all alternative IP addresses for this host
 	struct rr_entry *a2_e = NULL;
-	a2_e = rr_create_a(create_nlabel(hostname), inet_addr("192.168.0.31"));
+	v4addr.s_addr = inet_addr("192.168.0.10");
+	a2_e = rr_create_a(create_nlabel(hostname), &v4addr);
 	mdnsd_add_rr(svr, a2_e);
 
 	struct rr_entry *aaaa_e = NULL;

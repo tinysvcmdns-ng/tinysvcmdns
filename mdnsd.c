@@ -470,15 +470,15 @@ static void main_loop(struct mdnsd *svr) {
 /////////////////////////////////////////////////////
 
 
-void mdnsd_set_hostname(struct mdnsd *svr, const char *hostname, uint32_t ip) {
+void mdnsd_set_hostname(struct mdnsd *svr, const char *hostname, struct in_addr *addr) {
 	struct rr_entry *a_e = NULL,
-					*nsec_e = NULL;
+		*nsec_e = NULL;
 
 	// currently can't be called twice
 	// dont ask me what happens if the IP changes
 	assert(svr->hostname == NULL);
 
-	a_e = rr_create_a(create_nlabel(hostname), ip);
+	a_e = rr_create_a(create_nlabel(hostname), addr);
 
 	nsec_e = rr_create(create_nlabel(hostname), RR_NSEC);
 	nsec_e->ttl = DEFAULT_TTL_FOR_RECORD_WITH_HOSTNAME; // set to 120 seconds (default is 4500)

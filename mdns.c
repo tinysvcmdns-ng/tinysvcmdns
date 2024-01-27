@@ -392,10 +392,10 @@ int rr_list_append(struct rr_list **rr_head, struct rr_entry *rr) {
 	rr->cache_flush = 1;		\
 	rr->rr_class  = 1;
 
-struct rr_entry *rr_create_a(uint8_t *name, uint32_t addr) {
+struct rr_entry *rr_create_a(uint8_t *name, struct in_addr *addr) {
 	DECL_MALLOC_ZERO_STRUCT(rr, rr_entry);
 	FILL_RR_ENTRY(rr, name, RR_A);
-	rr->data.A.addr = addr;
+	rr->data.A.addr = addr->s_addr;
 	rr->ttl = DEFAULT_TTL_FOR_RECORD_WITH_HOSTNAME; // 120 seconds -- see RFC 6762 Section 10
 	return rr;
 }
