@@ -13,7 +13,7 @@ ifneq ($(CROSS_COMPILE),)
   AR := $(CROSS_COMPILE)$(AR)
 endif
 
-BIN=testmdnsd
+BIN=testmdnsd tinysvcmdns
 
 LIBTINYSVCMDNS_OBJS = mdns.o mdnsd.o
 
@@ -33,6 +33,8 @@ mdns: mdns.o
 mdnsd: mdns.o mdnsd.o
 
 testmdnsd: testmdnsd.o libtinysvcmdns.a
+
+tinysvcmdns: tinysvcmdns.o libtinysvcmdns.a
 
 libtinysvcmdns.a: $(patsubst %, libtinysvcmdns.a(%), $(LIBTINYSVCMDNS_OBJS))
 
