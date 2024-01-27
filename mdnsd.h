@@ -48,7 +48,7 @@ void mdnsd_set_hostname(struct mdnsd *svr, const char *hostname, uint32_t ip);
 void mdnsd_add_rr(struct mdnsd *svr, struct rr_entry *rr);
 
 // registers a service with the MDNS responder instance
-struct mdns_service *mdnsd_register_svc(struct mdnsd *svr, const char *instance_name, 
+struct mdns_service *mdnsd_register_svc(struct mdnsd *svr, const char *instance_name,
 		const char *type, uint16_t port, const char *hostname, const char *txt[]);
 
 // destroys the mdns_service struct returned by mdnsd_register_svc()

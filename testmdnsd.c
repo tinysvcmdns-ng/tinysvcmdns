@@ -72,10 +72,9 @@ int main(int argc, char *argv[]) {
 		&hints,
 		&results);
 	struct sockaddr_in6* addr = (struct sockaddr_in6*)results->ai_addr;
-	struct in6_addr v6addr = addr->sin6_addr;
-	freeaddrinfo(results);
 
-	aaaa_e = rr_create_aaaa(create_nlabel(hostname), &v6addr);
+	aaaa_e = rr_create_aaaa(create_nlabel(hostname), &addr->sin6_addr);
+	freeaddrinfo(results);
 
 	mdnsd_add_rr(svr, aaaa_e);
 

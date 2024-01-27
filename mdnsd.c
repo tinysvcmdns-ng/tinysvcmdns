@@ -26,11 +26,6 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#define LOG_ERR 3
-#else
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
@@ -38,7 +33,6 @@
 #include <arpa/inet.h>
 #include <net/if.h>
 #include <syslog.h>
-#endif
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -87,6 +81,10 @@ struct mdns_service {
 	struct rr_list *entries;
 };
 
+static int create_pipe(int handles[2]);
+static int read_pipe(int s, char* buf, int len);
+static int write_pipe(int s, char* buf, int len);
+static int close_pipe(int s);
 /////////////////////////////////
 
 
@@ -117,6 +115,13 @@ static int create_recv_sock() {
 		return r;
 	}
 
+#ifdef SO_REUSEPORT
+	on = 1;
+	if ((r = setsockopt(sd, SOL_SOCKET, SO_REUSEPORT,(char*) &on, sizeof(on))) < 0) {
+		log_message(LOG_ERR, "recv setsockopt(SO_REUSEPORT): %m");
+	  }
+#endif
+
 	/* bind to an address */
 	struct sockaddr_in serveraddr;
 	memset(&serveraddr, 0, sizeof(serveraddr));
@@ -145,6 +150,7 @@ static int create_recv_sock() {
 
 
 #ifdef IP_PKTINFO
+	on = 1;
 	if ((r = setsockopt(sd, SOL_IP, IP_PKTINFO, (char *) &on, sizeof(on))) < 0) {
 		log_message(LOG_ERR, "recv setsockopt(IP_PKTINFO): %m");
 		return r;
@@ -205,24 +211,24 @@ static void add_related_rr(struct mdnsd *svr, struct rr_list *list, struct mdns_
 		switch (ans->type) {
 			case RR_PTR:
 				// target host A, AAAA records
-				reply->num_add_rr += populate_answers(svr, &reply->rr_add, 
+				reply->num_add_rr += populate_answers(svr, &reply->rr_add,
 										MDNS_RR_GET_PTR_NAME(ans), RR_ANY);
 				break;
 
 			case RR_SRV:
 				// target host A, AAAA records
-				reply->num_add_rr += populate_answers(svr, &reply->rr_add, 
+				reply->num_add_rr += populate_answers(svr, &reply->rr_add,
 										ans->data.SRV.target, RR_ANY);
 
 				// perhaps TXT records of the same name?
 				// if we use RR_ANY, we risk pulling in the same RR_SRV
-				reply->num_add_rr += populate_answers(svr, &reply->rr_add, 
+				reply->num_add_rr += populate_answers(svr, &reply->rr_add,
 										ans->name, RR_TXT);
 				break;
 
 			case RR_A:
 			case RR_AAAA:
-				reply->num_add_rr += populate_answers(svr, &reply->rr_add, 
+				reply->num_add_rr += populate_answers(svr, &reply->rr_add,
 										ans->name, RR_NSEC);
 				break;
 
@@ -233,14 +239,14 @@ static void add_related_rr(struct mdnsd *svr, struct rr_list *list, struct mdns_
 	}
 }
 
-// creates an announce packet given the type name PTR 
+// creates an announce packet given the type name PTR
 static void announce_srv(struct mdnsd *svr, struct mdns_pkt *reply, uint8_t *name) {
 	mdns_init_reply(reply, 0);
 
 	reply->num_ans_rr += populate_answers(svr, &reply->rr_ans, name, RR_PTR);
-	
+
 	// remember to add the services dns-sd PTR too
-	reply->num_ans_rr += populate_answers(svr, &reply->rr_ans, 
+	reply->num_ans_rr += populate_answers(svr, &reply->rr_ans,
 								SERVICES_DNS_SD_NLABEL, RR_PTR);
 
 	// see if we can match additional records for answers
@@ -258,11 +264,11 @@ static int process_mdns_pkt(struct mdnsd *svr, struct mdns_pkt *pkt, struct mdns
 	assert(pkt != NULL);
 
 	// is it standard query?
-	if ((pkt->flags & MDNS_FLAG_RESP) == 0 && 
+	if ((pkt->flags & MDNS_FLAG_RESP) == 0 &&
 			MDNS_FLAG_GET_OPCODE(pkt->flags) == 0) {
 		mdns_init_reply(reply, pkt->id);
 
-		DEBUG_PRINTF("flags = %04x, qn = %d, ans = %d, add = %d\n", 
+		DEBUG_PRINTF("flags = %04x, qn = %d, ans = %d, add = %d\n",
 						pkt->flags,
 						pkt->num_qn,
 						pkt->num_ans_rr,
@@ -334,77 +340,20 @@ static int process_mdns_pkt(struct mdnsd *svr, struct mdns_pkt *pkt, struct mdns
 	return 0;
 }
 
-int create_pipe(int handles[2]) {
-#ifdef _WIN32
-	SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
-	if (sock == INVALID_SOCKET) {
-		return -1;
-	}
-	struct sockaddr_in serv_addr;
-	memset(&serv_addr, 0, sizeof(serv_addr));
-	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(0);
-	serv_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-	if (bind(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) == SOCKET_ERROR) {
-		closesocket(sock);
-		return -1;
-	}
-	if (listen(sock, 1) == SOCKET_ERROR) {
-		closesocket(sock);
-		return -1;
-	}
-	int len = sizeof(serv_addr);
-	if (getsockname(sock, (SOCKADDR*)&serv_addr, &len) == SOCKET_ERROR) {
-		closesocket(sock);
-		return -1;
-	}
-	if ((handles[1] = socket(PF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
-		closesocket(sock);
-		return -1;
-	}
-	if (connect(handles[1], (struct sockaddr*)&serv_addr, len) == SOCKET_ERROR) {
-		closesocket(sock);
-		return -1;
-	}
-	if ((handles[0] = accept(sock, (struct sockaddr*)&serv_addr, &len)) == INVALID_SOCKET) {
-		closesocket((SOCKET)handles[1]);
-		handles[1] = INVALID_SOCKET;
-		closesocket(sock);
-		return -1;
-	}
-	closesocket(sock);
-	return 0;
-#else
+static int create_pipe(int handles[2]) {
 	return pipe(handles);
-#endif
 }
 
-int read_pipe(int s, char* buf, int len) {
-#ifdef _WIN32
-	int ret = recv(s, buf, len, 0);
-	if (ret < 0 && WSAGetLastError() == WSAECONNRESET) {
-		ret = 0;
-	}
-	return ret;
-#else
+static int read_pipe(int s, char* buf, int len) {
 	return read(s, buf, len);
-#endif
 }
 
-int write_pipe(int s, char* buf, int len) {
-#ifdef _WIN32
-	return send(s, buf, len, 0);
-#else
+static int write_pipe(int s, char* buf, int len) {
 	return write(s, buf, len);
-#endif
 }
 
-int close_pipe(int s) {
-#ifdef _WIN32
-	return closesocket(s);
-#else
+static int close_pipe(int s) {
 	return close(s);
-#endif
 }
 
 // main loop to receive, process and send out MDNS replies
@@ -435,7 +384,7 @@ static void main_loop(struct mdnsd *svr) {
 			struct sockaddr_in fromaddr;
 			socklen_t sockaddr_size = sizeof(struct sockaddr_in);
 
-			ssize_t recvsize = recvfrom(svr->sockfd, pkt_buffer, PACKET_SIZE, 0, 
+			ssize_t recvsize = recvfrom(svr->sockfd, pkt_buffer, PACKET_SIZE, 0,
 				(struct sockaddr *) &fromaddr, &sockaddr_size);
 			if (recvsize < 0) {
 				log_message(LOG_ERR, "recv(): %m");
@@ -461,16 +410,18 @@ static void main_loop(struct mdnsd *svr) {
 
 			// extract from head of list
 			pthread_mutex_lock(&svr->data_lock);
-			if (svr->announce) 
+			if (svr->announce)
 				ann_e = rr_list_remove(&svr->announce, svr->announce->e);
 			pthread_mutex_unlock(&svr->data_lock);
 
 			if (! ann_e)
 				break;
 
+#ifndef NDEBUG
 			char *namestr = nlabel_to_str(ann_e->name);
 			DEBUG_PRINTF("sending announce for %s\n", namestr);
 			free(namestr);
+#endif
 
 			announce_srv(svr, mdns_reply, ann_e->name);
 
@@ -501,6 +452,7 @@ static void main_loop(struct mdnsd *svr) {
 
 	// destroy packet
 	mdns_init_reply(mdns_reply, 0);
+
 	free(mdns_reply);
 
 	free(pkt_buffer);
@@ -539,10 +491,10 @@ void mdnsd_add_rr(struct mdnsd *svr, struct rr_entry *rr) {
 	pthread_mutex_unlock(&svr->data_lock);
 }
 
-struct mdns_service *mdnsd_register_svc(struct mdnsd *svr, const char *instance_name, 
+struct mdns_service *mdnsd_register_svc(struct mdnsd *svr, const char *instance_name,
 		const char *type, uint16_t port, const char *hostname, const char *txt[]) {
-	struct rr_entry *txt_e = NULL, 
-					*srv_e = NULL, 
+	struct rr_entry *txt_e = NULL,
+					*srv_e = NULL,
 					*ptr_e = NULL,
 					*bptr_e = NULL;
 	uint8_t *target;
@@ -561,14 +513,14 @@ struct mdns_service *mdnsd_register_svc(struct mdnsd *svr, const char *instance_
 		rr_list_append(&service->entries, txt_e);
 
 		// add TXTs
-		for (; *txt; txt++) 
+		for (; *txt; txt++)
 			rr_add_txt(txt_e, *txt);
 	}
 
 	// create SRV record
 	assert(hostname || svr->hostname);	// either one as target
-	target = hostname ? 
-				create_nlabel(hostname) : 
+	target = hostname ?
+				create_nlabel(hostname) :
 				dup_nlabel(svr->hostname);
 
 	srv_e = rr_create_srv(dup_nlabel(nlabel), port, target);

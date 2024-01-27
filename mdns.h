@@ -33,11 +33,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef _WIN32
-#include <winsock.h>
-#else
 #include <arpa/inet.h>
-#endif
 
 #define MALLOC_ZERO_STRUCT(x, type) \
 	x = malloc(sizeof(struct type)); \
