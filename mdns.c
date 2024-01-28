@@ -63,7 +63,7 @@ uint8_t *dup_label(const uint8_t *label) {
 	if (len > 63)
 		return NULL;
 	uint8_t *newlabel = malloc(len + 1);
-	strncpy((char *) newlabel, (char *) label, len);
+	memcpy((char *) newlabel, (char *) label, len);
 	newlabel[len] = '\0';
 	return newlabel;
 }
@@ -78,8 +78,8 @@ uint8_t *join_nlabel(const uint8_t *n1, const uint8_t *n2) {
 	len2 = strlen((char *) n2);
 
 	s = malloc(len1 + len2 + 1);
-	strncpy((char *) s, (char *) n1, len1);
-	strncpy((char *) s+len1, (char *) n2, len2);
+	memcpy((char *) s, (char *) n1, len1);
+	memcpy((char *) s+len1, (char *) n2, len2);
 	s[len1 + len2] = '\0';
 	return s;
 }
@@ -100,7 +100,7 @@ char *nlabel_to_str(const uint8_t *name) {
 		if (buf_len <= label_len)
 			break;
 
-		strncpy(labelp, (char *) p + 1, label_len);
+		memcpy(labelp, (char *) p + 1, label_len);
 		labelp += label_len;
 
 		*labelp = '.';
@@ -157,7 +157,7 @@ uint8_t *create_label(const char *txt) {
 
 	s = malloc(len + 2);
 	s[0] = len;
-	strncpy((char *) s + 1, txt, len);
+	memcpy((char *) s + 1, txt, len);
 	s[len + 1] = '\0';
 
 	return s;
@@ -177,7 +177,7 @@ uint8_t *create_nlabel(const char *name) {
 	if (label == NULL)
 		return NULL;
 
-	strncpy((char *) label + 1, name, len);
+	memcpy((char *) label + 1, name, len);
 	label[len + 1] = '\0';
 
 	p = label;
@@ -249,11 +249,11 @@ static uint8_t *uncompress_nlabel(uint8_t *pkt_buf, size_t pkt_len, size_t off) 
 		if ((*p & 0xC0) == 0xC0) {
 			uint8_t *p2 = pkt_buf + (((p[0] & ~0xC0) << 8) | p[1]);
 			llen = *p2 + 1;
-			strncpy(sp, (char *) p2, llen);
+			memcpy(sp, (char *) p2, llen);
 			p = p2 + llen - 1;
 		} else {
 			llen = *p + 1;
-			strncpy(sp, (char *) p, llen);
+			memcpy(sp, (char *) p, llen);
 			p += llen - 1;
 		}
 		sp += llen;
@@ -843,7 +843,7 @@ static size_t mdns_encode_name(uint8_t *pkt_buf, size_t pkt_len, size_t off,
 
 			// copy this segment
 			int segment_len = *name + 1;
-			strncpy((char *) p, (char *) name, segment_len);
+			memcpy((char *) p, (char *) name, segment_len);
 
 			// cache the name for subsequent compression
 			DECL_MALLOC_ZERO_STRUCT(new_c, name_comp);
@@ -919,7 +919,7 @@ static size_t mdns_encode_rr(uint8_t *pkt_buf, size_t pkt_len, size_t off,
 			txt_rec = &rr->data.TXT;
 			for (; txt_rec; txt_rec = txt_rec->next) {
 				int len = txt_rec->txt[0] + 1;
-				strncpy((char *) p, (char *) txt_rec->txt, len);
+				memcpy((char *) p, (char *) txt_rec->txt, len);
 				p += len;
 			}
 			break;
