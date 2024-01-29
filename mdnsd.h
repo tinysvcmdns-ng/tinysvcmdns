@@ -58,5 +58,6 @@ void mdns_service_destroy(struct mdns_service *srv);
 // remove the mdns_service struct returned by mdnsd_register_svc()
 void mdns_service_remove(struct mdnsd *svr, struct mdns_service *svc);
 
+in_addr_t mdnsd_search_hostname(struct mdnsd *svr, const char *hostname);
 
 #endif/*!__MDNSD_H__*/

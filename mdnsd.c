@@ -283,6 +283,23 @@ static int process_mdns_pkt(struct mdnsd *svr, struct mdns_pkt *pkt, struct mdns
 		for (int i = 0; i < pkt->num_ans_rr; i++, ans = ans->next) {
 			char *namestr = NULL;
 			namestr = nlabel_to_str(ans->e->name);
+			struct rr_entry *waited_qn = rr_entry_match(svr->wait, ans->e);
+			if (svr->wait && waited_qn) {
+				struct rr_entry *qn_e = NULL;
+				qn_e = rr_list_remove(&svr->wait, waited_qn);
+				switch (ans->e->type) {
+					case RR_A:
+						qn_e->data.A.addr = pkt->fromaddr->sin_addr.s_addr;
+					break;
+					case RR_PTR:
+					break;
+					case RR_SRV:
+					break;
+					default:
+					break;
+				}
+				write_pipe(svr->notify_api[1], ".", 1);
+			}
 			DEBUG_PRINTF("ans #%d: type %s (%02x) - %s", i, rr_get_type_name(ans->e->type), ans->e->type, namestr);
 			switch (ans->e->type) {
 				case RR_A: {
@@ -633,6 +650,41 @@ void mdnsd_set_hostname_v6(struct mdnsd *svr, const char *hostname, struct in6_a
 	rr_group_add(&svr->group, aaaa_e);
 	rr_group_add(&svr->group, nsec_e);
 	pthread_mutex_unlock(&svr->data_lock);
+}
+
+in_addr_t mdnsd_search_hostname(struct mdnsd *svr, const char *hostname)
+{
+	uint8_t *nlabel;
+	nlabel = create_nlabel(hostname);
+	// create A record for type
+	struct rr_entry *a_e = NULL;
+	struct in_addr addr = {0};
+	a_e = rr_create_a(nlabel, &addr);
+
+	// modify lists here
+	pthread_mutex_lock(&svr->data_lock);
+	// append A entry to qn list
+	rr_list_append(&svr->qnl, a_e);
+	rr_list_append(&svr->wait, a_e);
+	pthread_mutex_unlock(&svr->data_lock);
+
+	// notify server
+	write_pipe(svr->notify_pipe[1], ".", 1);
+
+	fd_set fdset;
+	int max_fd = svr->notify_api[0];
+	char notify_buf[2];	// buffer for reading of notify_pipe
+
+	FD_ZERO(&fdset);
+	FD_SET(svr->notify_api[0], &fdset);
+	select(max_fd + 1, &fdset, NULL, NULL, NULL);
+
+	if (FD_ISSET(svr->notify_api[0], &fdset)) {
+		read_pipe(svr->notify_api[0], (char*)&notify_buf, 1);
+	}
+	addr.s_addr = a_e->data.A.addr;
+	rr_entry_destroy(a_e);
+	return addr.s_addr;
 }
 
 void mdnsd_add_rr(struct mdnsd *svr, struct rr_entry *rr) {

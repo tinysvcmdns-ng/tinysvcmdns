@@ -109,13 +109,22 @@ int main(int argc, char *argv[]) {
 	struct mdns_service *svc = mdnsd_register_svc(svr, "mytest", 
 									"_http._tcp.local", 8080, NULL, txt);
 
-	printf("added service and hostname. press ENTER to remove service\n");
+	printf("added service and hostname. press ENTER to search hostname\n");
+	getchar();
+
+	struct in_addr in;
+	in.s_addr = mdnsd_search_hostname(svr, "mysmartwifi.local");
+	printf("hostname %s found. press ENTER to remove service\n", inet_ntoa(in));
 	getchar();
 
 	mdns_service_remove(svr, svc);
 
 	mdns_service_destroy(svc);
 	printf("removed service. press ENTER to exit\n");
+	getchar();
+
+	in.s_addr = mdnsd_search_hostname(svr, "mysmartwifi.local");
+	printf("hostname %s found. press ENTER to exit\n", inet_ntoa(in));
 	getchar();
 
 	mdnsd_stop(svr);
