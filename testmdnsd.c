@@ -108,9 +108,14 @@ int main(int argc, char *argv[]) {
 	};
 	struct mdns_service *svc = mdnsd_register_svc(svr, "mytest", 
 									"_http._tcp.local", 8080, NULL, txt);
-	mdns_service_destroy(svc);
 
-	printf("added service and hostname. press ENTER to exit\n");
+	printf("added service and hostname. press ENTER to remove service\n");
+	getchar();
+
+	mdns_service_remove(svr, svc);
+
+	mdns_service_destroy(svc);
+	printf("removed service. press ENTER to exit\n");
 	getchar();
 
 	mdnsd_stop(svr);

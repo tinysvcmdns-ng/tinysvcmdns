@@ -661,10 +661,6 @@ void mdns_service_remove(struct mdnsd *svr, struct mdns_service *svc) {
 	// remove all empty groups
 	rr_group_clean(&svr->group);
 
-	// destroy this service entries
-	rr_list_destroy(svc->entries, 0);
-	free(svc);
-
 	pthread_mutex_unlock(&svr->data_lock);
 
 	// notify server
@@ -672,10 +668,10 @@ void mdns_service_remove(struct mdnsd *svr, struct mdns_service *svc) {
 
 }
 
-void mdns_service_destroy(struct mdns_service *srv) {
-	assert(srv != NULL);
-	rr_list_destroy(srv->entries, 0);
-	free(srv);
+void mdns_service_destroy(struct mdns_service *svc) {
+	assert(svc != NULL);
+	rr_list_destroy(svc->entries, 0);
+	free(svc);
 }
 
 struct mdnsd *mdnsd_start(struct in_addr *iaddr) {

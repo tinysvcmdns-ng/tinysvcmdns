@@ -55,7 +55,7 @@ struct mdns_service *mdnsd_register_svc(struct mdnsd *svr, const char *instance_
 // destroys the mdns_service struct returned by mdnsd_register_svc()
 void mdns_service_destroy(struct mdns_service *srv);
 
-// remove AND destroys the mdns_service struct returned by mdnsd_register_svc()
+// remove the mdns_service struct returned by mdnsd_register_svc()
 void mdns_service_remove(struct mdnsd *svr, struct mdns_service *svc);
 
 
