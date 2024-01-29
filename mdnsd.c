@@ -69,6 +69,7 @@ struct mdnsd {
 	pthread_mutex_t data_lock;
 	int sockfd;
 	int notify_pipe[2];
+	int notify_api[2];
 	int stop_flag;
 
 	struct rr_group *group;
@@ -773,6 +774,12 @@ struct mdnsd *mdnsd_start(struct in_addr *iaddr) {
 		return NULL;
 	}
 
+	if (create_pipe(server->notify_api) != 0) {
+		log_message(LOG_ERR, "pipe(): %m\n");
+		free(server);
+		return NULL;
+	}
+
 	server->sockfd = create_recv_sock(iaddr);
 	if (server->sockfd < 0) {
 		log_message(LOG_ERR, "unable to create recv socket");
@@ -811,6 +818,9 @@ void mdnsd_stop(struct mdnsd *s) {
 
 	close_pipe(s->notify_pipe[0]);
 	close_pipe(s->notify_pipe[1]);
+
+	close_pipe(s->notify_api[0]);
+	close_pipe(s->notify_api[1]);
 
 	pthread_mutex_destroy(&s->data_lock);
 	rr_group_destroy(s->group);
