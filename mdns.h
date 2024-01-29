@@ -145,6 +145,8 @@ struct rr_group {
 #define MDNS_RR_GET_PTR_NAME(rr)  (rr->data.PTR.name != NULL ? rr->data.PTR.name : rr->data.PTR.entry->name)
 
 struct mdns_pkt {
+	struct sockaddr_in *fromaddr;
+
 	uint16_t id;	// transaction ID
 	uint16_t flags;
 	uint16_t num_qn;
@@ -158,7 +160,7 @@ struct mdns_pkt {
 	struct rr_list *rr_add;		// additional RRs
 };
 
-struct mdns_pkt *mdns_parse_pkt(uint8_t *pkt_buf, size_t pkt_len);
+struct mdns_pkt *mdns_parse_pkt(uint8_t *pkt_buf, size_t pkt_len, struct sockaddr_in *fromaddr);
 
 void mdns_init_reply(struct mdns_pkt *pkt, uint16_t id);
 size_t mdns_encode_pkt(struct mdns_pkt *answer, uint8_t *pkt_buf, size_t pkt_len);

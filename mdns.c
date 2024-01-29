@@ -841,7 +841,7 @@ err:
 }
 
 // parse a MDNS packet into an mdns_pkt struct
-struct mdns_pkt *mdns_parse_pkt(uint8_t *pkt_buf, size_t pkt_len) {
+struct mdns_pkt *mdns_parse_pkt(uint8_t *pkt_buf, size_t pkt_len, struct sockaddr_in *fromaddr) {
 	uint8_t *p = pkt_buf;
 	size_t off;
 	struct mdns_pkt *pkt;
@@ -851,6 +851,7 @@ struct mdns_pkt *mdns_parse_pkt(uint8_t *pkt_buf, size_t pkt_len) {
 		return NULL;
 
 	MALLOC_ZERO_STRUCT(pkt, mdns_pkt);
+	pkt->fromaddr = fromaddr;
 
 	// parse header
 	pkt->id 			= mdns_read_u16(p); p += sizeof(uint16_t);

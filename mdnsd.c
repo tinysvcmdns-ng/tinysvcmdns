@@ -397,7 +397,7 @@ static void main_loop(struct mdnsd *svr) {
 			}
 
 			DEBUG_PRINTF("data from=%s size=%ld\n", inet_ntoa(fromaddr.sin_addr), (long) recvsize);
-			struct mdns_pkt *mdns = mdns_parse_pkt(pkt_buffer, recvsize);
+			struct mdns_pkt *mdns = mdns_parse_pkt(pkt_buffer, recvsize, &fromaddr);
 			if (mdns != NULL) {
 				if (process_mdns_pkt(svr, mdns, mdns_reply)) {
 					size_t replylen = mdns_encode_pkt(mdns_reply, pkt_buffer, PACKET_SIZE);
