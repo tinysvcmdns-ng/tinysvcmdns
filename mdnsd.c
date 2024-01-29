@@ -69,7 +69,6 @@ struct mdnsd {
 	pthread_mutex_t data_lock;
 	int sockfd;
 	int notify_pipe[2];
-	int notify_api[2];
 	int stop_flag;
 
 	struct rr_group *group;
@@ -287,18 +286,8 @@ static int process_mdns_pkt(struct mdnsd *svr, struct mdns_pkt *pkt, struct mdns
 			if (svr->wait && waited_qn) {
 				struct rr_entry *qn_e = NULL;
 				qn_e = rr_list_remove(&svr->wait, waited_qn);
-				switch (ans->e->type) {
-					case RR_A:
-						qn_e->data.A.addr = pkt->fromaddr->sin_addr.s_addr;
-					break;
-					case RR_PTR:
-					break;
-					case RR_SRV:
-					break;
-					default:
-					break;
-				}
-				write_pipe(svr->notify_api[1], ".", 1);
+				if (qn_e->callback.cb)
+					qn_e->callback.cb(qn_e->callback.data, ans, pkt->fromaddr);
 			}
 			DEBUG_PRINTF("ans #%d: type %s (%02x) - %s", i, rr_get_type_name(ans->e->type), ans->e->type, namestr);
 			switch (ans->e->type) {
@@ -652,14 +641,42 @@ void mdnsd_set_hostname_v6(struct mdnsd *svr, const char *hostname, struct in6_a
 	pthread_mutex_unlock(&svr->data_lock);
 }
 
+struct search_hostname
+{
+	int pipe;
+	struct in_addr addr;
+};
+
+static int _mdnsd_search_hostname_cb(void * data, struct rr_list *ans, struct sockaddr_in *fromaddr)
+{
+	struct search_hostname *search = (struct search_hostname *)data;
+	switch (ans->e->type) {
+		case RR_A:
+			search->addr.s_addr = fromaddr->sin_addr.s_addr;
+		break;
+		default:
+			return -1;
+		break;
+	}
+	write_pipe(search->pipe, ".", 1);
+	return 0;
+}
+
 in_addr_t mdnsd_search_hostname(struct mdnsd *svr, const char *hostname)
 {
 	uint8_t *nlabel;
 	nlabel = create_nlabel(hostname);
 	// create A record for type
-	struct rr_entry *a_e = NULL;
 	struct in_addr addr = {0};
+	struct search_hostname search = {0};
+	int handles[2];
+	if (! create_pipe(handles))
+		search.pipe = handles[1];
+
+	struct rr_entry *a_e = NULL;
 	a_e = rr_create_a(nlabel, &addr);
+	a_e->callback.cb = _mdnsd_search_hostname_cb;
+	a_e->callback.data = &search;
 
 	// modify lists here
 	pthread_mutex_lock(&svr->data_lock);
@@ -672,17 +689,20 @@ in_addr_t mdnsd_search_hostname(struct mdnsd *svr, const char *hostname)
 	write_pipe(svr->notify_pipe[1], ".", 1);
 
 	fd_set fdset;
-	int max_fd = svr->notify_api[0];
+	int max_fd = handles[0];
 	char notify_buf[2];	// buffer for reading of notify_pipe
+	struct timeval timeout = {0};
+	timeout.tv_sec = 2;
+	
 
 	FD_ZERO(&fdset);
-	FD_SET(svr->notify_api[0], &fdset);
-	select(max_fd + 1, &fdset, NULL, NULL, NULL);
+	FD_SET(handles[0], &fdset);
+	select(max_fd + 1, &fdset, NULL, NULL, &timeout);
 
-	if (FD_ISSET(svr->notify_api[0], &fdset)) {
-		read_pipe(svr->notify_api[0], (char*)&notify_buf, 1);
+	if (FD_ISSET(handles[0], &fdset)) {
+		read_pipe(handles[0], (char*)&notify_buf, 1);
 	}
-	addr.s_addr = a_e->data.A.addr;
+	addr.s_addr = search.addr.s_addr;
 	rr_entry_destroy(a_e);
 	return addr.s_addr;
 }
@@ -826,12 +846,6 @@ struct mdnsd *mdnsd_start(struct in_addr *iaddr) {
 		return NULL;
 	}
 
-	if (create_pipe(server->notify_api) != 0) {
-		log_message(LOG_ERR, "pipe(): %m\n");
-		free(server);
-		return NULL;
-	}
-
 	server->sockfd = create_recv_sock(iaddr);
 	if (server->sockfd < 0) {
 		log_message(LOG_ERR, "unable to create recv socket");
@@ -871,8 +885,6 @@ void mdnsd_stop(struct mdnsd *s) {
 	close_pipe(s->notify_pipe[0]);
 	close_pipe(s->notify_pipe[1]);
 
-	close_pipe(s->notify_api[0]);
-	close_pipe(s->notify_api[1]);
 
 	pthread_mutex_destroy(&s->data_lock);
 	rr_group_destroy(s->group);

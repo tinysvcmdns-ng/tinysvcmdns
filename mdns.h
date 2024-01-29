@@ -48,6 +48,11 @@
   #define DEBUG_PRINTF(...) ((void) 0)
 #endif
 
+struct rr_list;
+struct rr_callback {
+	int (*cb)(void * data, struct rr_list *ans, struct sockaddr_in *fromaddr);
+	void *data;
+};
 
 #define DEFAULT_TTL 4500
 #define DEFAULT_TTL_FOR_RECORD_WITH_HOSTNAME 120
@@ -101,6 +106,7 @@ struct rr_entry {
 
 	// for use in Questions only
 	char unicast_query;
+	struct rr_callback callback;
 
 	// for use in Answers only
 	char cache_flush;
