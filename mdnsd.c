@@ -280,9 +280,7 @@ static int process_mdns_pkt(struct mdnsd *svr, struct mdns_pkt *pkt, struct mdns
 	if (pkt->flags & MDNS_FLAG_RESP) {
 		struct rr_list *ans = pkt->rr_ans;
 		for (int i = 0; i < pkt->num_ans_rr; i++, ans = ans->next) {
-			char *namestr = NULL;
-			namestr = nlabel_to_str(ans->e->name);
-			struct rr_entry *waited_qn = rr_entry_match(svr->wait, ans->e);
+			struct rr_entry *waited_qn = rr_entry_find(svr->wait, ans->e->name, ans->e->type);
 			if (svr->wait && waited_qn) {
 				struct rr_entry *qn_e = NULL;
 				qn_e = rr_list_remove(&svr->wait, waited_qn);
@@ -290,6 +288,8 @@ static int process_mdns_pkt(struct mdnsd *svr, struct mdns_pkt *pkt, struct mdns
 					qn_e->callback.cb(qn_e->callback.data, ans, pkt->fromaddr);
 			}
 #ifndef NDEBUG
+			char *namestr = NULL;
+			namestr = nlabel_to_str(ans->e->name);
 			DEBUG_PRINTF("ans #%d: type %s (%02x) - %s", i, rr_get_type_name(ans->e->type), ans->e->type, namestr);
 			switch (ans->e->type) {
 				case RR_A: {
@@ -341,8 +341,8 @@ static int process_mdns_pkt(struct mdnsd *svr, struct mdns_pkt *pkt, struct mdns
 				break;
 			}
 			DEBUG_PRINTF("\n");
-#endif
 			free(namestr);
+#endif
 		}
 	}
 
@@ -680,6 +680,7 @@ in_addr_t mdnsd_search_hostname(struct mdnsd *svr, const char *hostname)
 {
 	uint8_t *nlabel;
 	nlabel = create_nlabel(hostname);
+
 	// create A record for type
 	struct in_addr addr = {0};
 	struct search_hostname search = {0};
@@ -719,6 +720,99 @@ in_addr_t mdnsd_search_hostname(struct mdnsd *svr, const char *hostname)
 	addr.s_addr = search.addr.s_addr;
 	rr_entry_destroy(a_e);
 	return addr.s_addr;
+}
+
+struct mdnsd_search_data
+{
+	struct mdnsd *svr;
+	struct rr_entry *ptr_e;
+	lookup_cb cb;
+	void *data;
+};
+
+static int _mdnsd_search_ptr_cb(void * data, struct rr_list *ans, struct sockaddr_in *fromaddr)
+{
+	struct mdnsd_search_data *search = (struct mdnsd_search_data *)data;
+	const char *string = NULL;
+	if (ans->e->type != RR_PTR)
+		return -1;
+	uint8_t *label = ans->e->data.PTR.name?
+					ans->e->data.PTR.name : ans->e->name;
+	string = nlabel_to_str(label);
+	struct lookup_arg args[10];
+	int i = 0;
+	struct rr_entry *e;
+	e = rr_entry_find(ans, label, RR_A);
+	if (e) {
+		args[i].type = lookup_address;
+		args[i++].val = (void *)(long int)fromaddr->sin_addr.s_addr;
+	}
+	e = rr_entry_find(ans, label, RR_SRV);
+	if (e) {
+		args[i].type = lookup_port;
+		args[i++].val = (void *)(long int)e->data.SRV.port;
+		args[i].type = lookup_hostname;
+		args[i++].val = (void *)nlabel_to_str(e->data.SRV.target);
+	}
+	e = rr_entry_find(ans, label, RR_TXT);
+	if (e) {
+		struct rr_data_txt *t = &e->data.TXT;
+		for (; t; t = t->next) {
+			args[i].type = lookup_other;
+			args[i++].val = (void *)nlabel_to_str(t->txt);
+		}
+	}
+		
+	if (search->cb)
+		search->cb(search->data, string, args, i);
+	for (int j = 0; j < i; j++) {
+		if (args[j].type == lookup_hostname)
+			free(args[j].val);
+		if (args[j].type == lookup_other)
+			free(args[j].val);
+	}
+	// wait again an answer
+	pthread_mutex_lock(&search->svr->data_lock);
+	rr_list_append(&search->svr->wait, search->ptr_e);
+	pthread_mutex_unlock(&search->svr->data_lock);
+	return 0;
+}
+
+void *mdnsd_search(struct mdnsd *svr, const char *name, lookup_cb cb, void *data)
+{
+	struct mdnsd_search_data *search = malloc(sizeof(*search));
+	uint8_t *nlabel;
+	nlabel = create_nlabel(name);
+
+	search->svr = svr;
+	search->cb = cb;
+	search->data = data;
+
+	search->ptr_e = rr_create_ptr(nlabel, NULL);
+	search->ptr_e->data.PTR.name = dup_nlabel(nlabel);
+	search->ptr_e->callback.cb = _mdnsd_search_ptr_cb;
+	search->ptr_e->callback.data = search;
+
+	// modify lists here
+	pthread_mutex_lock(&svr->data_lock);
+	// append A entry to qn list
+	rr_list_append(&svr->qnl, search->ptr_e);
+	rr_list_append(&svr->wait, search->ptr_e);
+	pthread_mutex_unlock(&svr->data_lock);
+
+	// notify server
+	write_pipe(svr->notify_pipe[1], ".", 1);
+	return search;
+}
+
+void mdnsd_unsearch(struct mdnsd *svr, void *data)
+{
+	struct mdnsd_search_data *search = (struct mdnsd_search_data *)data;
+
+	pthread_mutex_lock(&search->svr->data_lock);
+	rr_list_remove(&search->svr->wait, search->ptr_e);
+	pthread_mutex_unlock(&search->svr->data_lock);
+	rr_entry_destroy(search->ptr_e);
 }
 
 void mdnsd_add_rr(struct mdnsd *svr, struct rr_entry *rr) {

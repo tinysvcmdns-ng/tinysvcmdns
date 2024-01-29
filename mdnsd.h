@@ -60,4 +60,18 @@ void mdns_service_remove(struct mdnsd *svr, struct mdns_service *svc);
 
 in_addr_t mdnsd_search_hostname(struct mdnsd *svr, const char *hostname);
 
+struct lookup_arg{
+	enum lookup_type
+	{
+		lookup_hostname,
+		lookup_address,
+		lookup_port,
+		lookup_other,
+	} type;
+	void *val;
+};
+typedef int(*lookup_cb)(void *data, const char *name, struct lookup_arg args[], int nargs);
+void *mdnsd_search(struct mdnsd *svr, const char *name, lookup_cb cb, void *data);
+void mdnsd_unsearch(struct mdnsd *svr, void *search);
+
 #endif/*!__MDNSD_H__*/

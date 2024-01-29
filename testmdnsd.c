@@ -59,6 +59,29 @@ static in_addr_t search_host(void)
 	}
 	return addr;
 }
+int lookup_service(void *data, const char *name, struct lookup_arg args[], int nargs)
+{
+	struct in_addr in = {0};
+	printf("LOOKUP found %s\n", name);
+	for (int i = 0; i < nargs; i++) {
+		switch (args[i].type) {
+			case lookup_hostname:
+				printf("\t %s\n", (char *)args[i].val);
+			break;
+			case lookup_port:
+				printf("\t %ld\n", (long int)args[i].val);
+			break;
+			case lookup_address:
+				in.s_addr = (long int)args[i].val;
+				printf("\t %s\n", inet_ntoa(in));
+			break;
+			case lookup_other:
+				printf("\t %s\n", (char *)args[i].val);
+			break;
+		}
+	}
+	return 0;
+}
 
 int main(int argc, char *argv[]) {
 	// create host entries
@@ -70,7 +93,7 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
-	printf("mdnsd_start OK. press ENTER to add hostname & service\n");
+	printf("mdnsd_start OK. press ENTER to add hostname %s & service\n", hostname);
 	getchar();
 
 	struct in_addr v4addr;
@@ -109,23 +132,28 @@ int main(int argc, char *argv[]) {
 	struct mdns_service *svc = mdnsd_register_svc(svr, "mytest", 
 									"_http._tcp.local", 8080, NULL, txt);
 
-	printf("added service and hostname. press ENTER to search hostname\n");
+	printf("added service and hostname. press ENTER to search hostname for %s\n", hostname);
 	getchar();
 
 	struct in_addr in;
-	in.s_addr = mdnsd_search_hostname(svr, "mysmartwifi.local");
-	printf("hostname %s found. press ENTER to remove service\n", inet_ntoa(in));
+	in.s_addr = mdnsd_search_hostname(svr, hostname);
+	printf("hostname %s found. press ENTER to search _http._tcp.local\n", inet_ntoa(in));
+	getchar();
+
+	void * search = mdnsd_search(svr, "_http._tcp.local", lookup_service, NULL);
+	printf("press ENTER to remove service\n");
 	getchar();
 
 	mdns_service_remove(svr, svc);
 
 	mdns_service_destroy(svc);
-	printf("removed service. press ENTER to exit\n");
+	printf("removed service. press ENTER to search hostname for %s\n", hostname);
 	getchar();
 
-	in.s_addr = mdnsd_search_hostname(svr, "mysmartwifi.local");
+	in.s_addr = mdnsd_search_hostname(svr, hostname);
 	printf("hostname %s found. press ENTER to exit\n", inet_ntoa(in));
 	getchar();
+	mdnsd_unsearch(svr, search);
 
 	mdnsd_stop(svr);
 
