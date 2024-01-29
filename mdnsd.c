@@ -75,6 +75,8 @@ struct mdnsd {
 	struct rr_list *announce;
 	struct rr_list *services;
 	struct rr_list *leave;
+	struct rr_list *qnl;
+	struct rr_list *wait;
 	uint8_t *hostname;
 };
 
@@ -269,16 +271,64 @@ static int process_mdns_pkt(struct mdnsd *svr, struct mdns_pkt *pkt, struct mdns
 
 	assert(pkt != NULL);
 
+	DEBUG_PRINTF("flags = %04x, qn = %d, ans = %d, add = %d\n",
+					pkt->flags,
+					pkt->num_qn,
+					pkt->num_ans_rr,
+					pkt->num_add_rr);
+
+	if (pkt->flags & MDNS_FLAG_RESP) {
+		struct rr_list *ans = pkt->rr_ans;
+		for (int i = 0; i < pkt->num_ans_rr; i++, ans = ans->next) {
+			char *namestr = NULL;
+			namestr = nlabel_to_str(ans->e->name);
+			DEBUG_PRINTF("ans #%d: type %s (%02x) - %s", i, rr_get_type_name(ans->e->type), ans->e->type, namestr);
+			switch (ans->e->type) {
+				case RR_A: {
+					
+				}
+				break;
+				case RR_PTR: {
+					char *string = NULL;
+					uint8_t *label = ans->e->data.PTR.name?
+									ans->e->data.PTR.name : NULL;
+					if (label)
+						string = nlabel_to_str(label);
+					else
+						continue;
+					DEBUG_PRINTF(" - %s", string);
+					
+					if (string)
+						free(string);
+				}
+				break;
+				case RR_SRV: {
+					char *string = NULL;
+					uint8_t *target = ans->e->data.SRV.target?
+									ans->e->data.SRV.target : NULL;
+					if (target)
+						string = nlabel_to_str(target);
+					DEBUG_PRINTF(" - %d %d %s:%d",
+									ans->e->data.SRV.priority,
+									ans->e->data.SRV.weight,
+									string,
+									ans->e->data.SRV.port);
+					if (string)
+						free(string);
+				}
+				break;
+				default:
+				break;
+			}
+			DEBUG_PRINTF("\n");
+			free(namestr);
+		}
+	}
+
 	// is it standard query?
 	if ((pkt->flags & MDNS_FLAG_RESP) == 0 &&
 			MDNS_FLAG_GET_OPCODE(pkt->flags) == 0) {
 		mdns_init_reply(reply, pkt->id);
-
-		DEBUG_PRINTF("flags = %04x, qn = %d, ans = %d, add = %d\n",
-						pkt->flags,
-						pkt->num_qn,
-						pkt->num_ans_rr,
-						pkt->num_add_rr);
 
 		// loop through questions
 		struct rr_list *qnl = pkt->rr_qn;
@@ -434,6 +484,42 @@ static void main_loop(struct mdnsd *svr) {
 			if (mdns_reply->num_ans_rr > 0) {
 				size_t replylen = mdns_encode_pkt(mdns_reply, pkt_buffer, PACKET_SIZE);
 				send_packet(svr->sockfd, pkt_buffer, replylen);
+			}
+		}
+
+		while (1) {
+			struct rr_entry *qn_e = NULL;
+
+			pthread_mutex_lock(&svr->data_lock);
+			if (svr->qnl)
+				qn_e = rr_list_remove(&svr->qnl, svr->qnl->e);
+			pthread_mutex_unlock(&svr->data_lock);
+
+			if (!qn_e)
+				break;
+
+			mdns_init_reply(mdns_reply, 0);
+			mdns_reply->flags = 0;
+
+#ifndef NDEBUG
+			char *namestr = nlabel_to_str(qn_e->name);
+			DEBUG_PRINTF("sending qn for %s\n", namestr);
+			free(namestr);
+#endif
+
+			qn_e->ttl = 0;
+			qn_e->unicast_query = 0;
+			qn_e->cache_flush = 0;
+
+			mdns_reply->num_qn += rr_list_append(&mdns_reply->rr_qn, qn_e);
+
+			// send out packet
+			if (mdns_reply->num_qn > 0) {
+				size_t replylen = mdns_encode_pkt(mdns_reply, pkt_buffer, PACKET_SIZE);
+				if (replylen == 0)
+					log_message(LOG_ERR, "mdns_encode_pkt: empty package");
+				else
+					send_packet(svr->sockfd, pkt_buffer, replylen);
 			}
 		}
 

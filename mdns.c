@@ -1048,9 +1048,6 @@ size_t mdns_encode_pkt(struct mdns_pkt *answer, uint8_t *pkt_buf, size_t pkt_len
 	if (p == NULL)
 		return -1;
 
-	// this is an Answer - number of qns should be zero
-	assert(answer->num_qn == 0);
-
 	p = mdns_write_u16(p, answer->id);
 	p = mdns_write_u16(p, answer->flags);
 	p = mdns_write_u16(p, answer->num_qn);
@@ -1070,9 +1067,8 @@ size_t mdns_encode_pkt(struct mdns_pkt *answer, uint8_t *pkt_buf, size_t pkt_len
 	comp->label = (uint8_t *) "";
 	comp->pos = 0;
 
-	// skip encoding of qn
-	
 	struct rr_list *rr_set[] = {
+		answer->rr_qn,
 		answer->rr_ans,
 		answer->rr_auth,
 		answer->rr_add
