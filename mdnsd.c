@@ -289,10 +289,24 @@ static int process_mdns_pkt(struct mdnsd *svr, struct mdns_pkt *pkt, struct mdns
 				if (qn_e->callback.cb)
 					qn_e->callback.cb(qn_e->callback.data, ans, pkt->fromaddr);
 			}
+#ifndef NDEBUG
 			DEBUG_PRINTF("ans #%d: type %s (%02x) - %s", i, rr_get_type_name(ans->e->type), ans->e->type, namestr);
 			switch (ans->e->type) {
 				case RR_A: {
-					
+					DEBUG_PRINTF(" - %s", inet_ntoa(pkt->fromaddr->sin_addr));
+				}
+				break;
+				case RR_TXT: {
+					struct rr_data_txt *txt_e = &ans->e->data.TXT;
+					while (txt_e) {
+						char *string = NULL;
+						if (txt_e->txt)
+							string = nlabel_to_str(txt_e->txt);
+						DEBUG_PRINTF(" - %s", string);
+						if (string)
+							free(string);
+						txt_e = txt_e->next;
+					}
 				}
 				break;
 				case RR_PTR: {
@@ -304,7 +318,6 @@ static int process_mdns_pkt(struct mdnsd *svr, struct mdns_pkt *pkt, struct mdns
 					else
 						continue;
 					DEBUG_PRINTF(" - %s", string);
-					
 					if (string)
 						free(string);
 				}
@@ -328,6 +341,7 @@ static int process_mdns_pkt(struct mdnsd *svr, struct mdns_pkt *pkt, struct mdns
 				break;
 			}
 			DEBUG_PRINTF("\n");
+#endif
 			free(namestr);
 		}
 	}
