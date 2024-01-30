@@ -740,6 +740,7 @@ static size_t mdns_parse_rr(uint8_t *pkt_buf, size_t pkt_len, size_t off,
 
 	rr->cache_flush = (*p & 0x80) == 0x80;
 	rr->rr_class = mdns_read_u16(p) & ~0x80;
+	rr->unicast_query = (*p & 0x80) == 0x80;
 	p += sizeof(uint16_t);
 
 	rr->ttl = mdns_read_u32(p);
@@ -818,6 +819,25 @@ static size_t mdns_parse_rr(uint8_t *pkt_buf, size_t pkt_len, size_t off,
 				txt_rec = txt_rec->next;
 				txt_rec->next = NULL;
 			}
+			break;
+
+		case RR_SRV:
+			rr->data.SRV.priority = (mdns_read_u16(p));
+			p += sizeof(uint16_t);
+
+			rr->data.SRV.weight = (mdns_read_u16(p));
+			p += sizeof(uint16_t);
+
+			rr->data.SRV.port = (mdns_read_u16(p));
+			p += sizeof(uint16_t);
+
+			rr->data.SRV.target = uncompress_nlabel(pkt_buf, pkt_len, (size_t)(p - pkt_buf));
+			if (rr->data.SRV.target == NULL) {
+				DEBUG_PRINTF("unable to parse/uncompress label for PTR name\n");
+				parse_error = 1;
+				break;
+			}
+			p += rr_data_len;
 			break;
 
 		default:
